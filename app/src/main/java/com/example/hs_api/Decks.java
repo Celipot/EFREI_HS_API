@@ -1,75 +1,98 @@
 package com.example.hs_api;
 
 import android.content.Context;
+import android.util.Log;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
+import java.io.DataInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
-public class Decks {
-    ArrayList<Deck> decks;
-    Context context;
+//class representing decks saved as variable in the application
+public class Decks implements Serializable {
+    //all decks
+    LinkedList<Deck> decks;
+    //path to the json file where decks are stored
     String path;
 
-    Decks(Context context, String path) throws IOException, JSONException {
-        this.context = context;
-        this.path = path;
-        decks = new ArrayList<>();
+    Decks(Context context) throws IOException, JSONException {
 
-        File file = new File(context.getFilesDir(),path);
-        if (file.exists()) {
-            FileReader fileReader = new FileReader(file);
-            BufferedReader bufferedReader = new BufferedReader(fileReader);
-            StringBuilder stringBuilder = new StringBuilder();
-            String line = bufferedReader.readLine();
-            while (line != null) {
-                stringBuilder.append(line).append("\n");
-                line = bufferedReader.readLine();
-            }
-            bufferedReader.close();
-            JSONObject fileContent = new JSONObject(stringBuilder.toString());
-            JSONArray savedDecks = fileContent.getJSONArray("Decks");
-
-            String name;
-            String deckClass;
-            JSONArray jsonCards;
-            ArrayList<String> cards;
-            ArrayList<String> nbrCards;
-            for (int i = 0; i < savedDecks.length(); i++) {
-                cards = new ArrayList<>();
-                nbrCards = new ArrayList<>();
-                name = savedDecks.getJSONObject(i).getString("name");
-                deckClass = savedDecks.getJSONObject(i).getString("deckClass");
-                jsonCards = savedDecks.getJSONObject(i).getJSONArray("Cards");
-                for (int j = 0; j < jsonCards.length(); j++) {
-                    cards.add(jsonCards.getJSONObject(j).getString("id"));
-                    nbrCards.add(jsonCards.getJSONObject(j).getString("nbr"));
+        this.path = context.getApplicationInfo().dataDir;
+        decks = new LinkedList<>();
+        JSONArray savedDecks = new JSONArray();
+        //checking if there is already a storage file
+        File checkFile = new File(path+ "/Decks.txt");
+        if(!checkFile.exists()) {
+            //if the is not it load a sample json from the application's assets
+            JSONObject fileContent = new JSONObject(getJsonFromAssets(context,"Decks"));
+            savedDecks = fileContent.getJSONArray("Decks");
+        } else {
+            //if there is a storage file it is read then stored in Decks
+            String myData = "";
+            //opening and reading the file
+            try {
+                FileInputStream fis = new FileInputStream(path + "/Decks.txt");
+                DataInputStream in = new DataInputStream(fis);
+                BufferedReader br =
+                        new BufferedReader(new InputStreamReader(in));
+                String strLine;
+                while ((strLine = br.readLine()) != null) {
+                    myData = myData + strLine;
                 }
-                decks.add(new Deck(name, deckClass, cards, nbrCards));
+                in.close();
+            } catch (IOException e) {
+                e.printStackTrace();
             }
+            savedDecks = new JSONObject(myData).getJSONArray("Decks");
         }
-        else {
-            file.mkdir();
 
+        //once the json file is opened it is then translated to create a Decks instance
+        String name;
+        String deckClass;
+        JSONArray jsonCards;
+        LinkedList<String> cards;
+        LinkedList<String> nbrCards;
+        //reading every decks
+        for (int i = 0; i < savedDecks.length(); i++) {
+            cards = new LinkedList<>();
+            nbrCards = new LinkedList<>();
+            name = savedDecks.getJSONObject(i).getString("name");
+            deckClass = savedDecks.getJSONObject(i).getString("deckClass");
+            jsonCards = savedDecks.getJSONObject(i).getJSONArray("Cards");
+            //reading every cards
+            for (int j = 0; j < jsonCards.length(); j++) {
+                cards.add(jsonCards.getJSONObject(j).getString("id"));
+                nbrCards.add(jsonCards.getJSONObject(j).getString("nbr"));
+            }
+            decks.add(new Deck(name, deckClass, cards, nbrCards));
         }
+
     }
 
-    private void saveDecks() throws JSONException, IOException {
+    //method to save the Decks instance of the application in a json file
+    public void saveDecks() throws JSONException, IOException {
         JSONArray jsonDecks = new JSONArray();
         JSONObject jsonDeck;
         JSONArray jsonCards;
         JSONObject jsonCard;
+        //for each decks
         for (Deck deck : decks) {
             jsonDeck = new JSONObject();
             jsonCards = new JSONArray();
+            //for each cards
             for(int i = 0; i < deck.getCards().size(); i++) {
                 jsonCard = new JSONObject();
                 jsonCard.put("id",deck.getCards().get(i));
@@ -83,33 +106,77 @@ public class Decks {
         }
         JSONObject jsonFile = new JSONObject();
         jsonFile.put("Decks",jsonDecks);
-        File file = new File(context.getFilesDir(),path);
-        if (file.exists()) {
-            file.delete();
+        //creating/filling the file
+        try {
+            File checkFile = new File(path+  "/Decks.txt");
+            if(checkFile.exists()) {
+                checkFile.delete();
+            }
+            checkFile.createNewFile();
+            FileWriter file = new FileWriter(path +  "/Decks.txt");
+            file.write(jsonFile.toString());
+            file.flush();
+            file.close();
+        } catch(IOException e) {
+            e.printStackTrace();
         }
-        file.mkdir();
-        File gpxfile = new File(file, "sample");
-        FileWriter writer = new FileWriter(gpxfile);
-        writer.append(jsonFile.toString());
-        writer.flush();
-        writer.close();
+    }
+
+    public void newDeck(String name,String deckClass) {
+        decks.add(new Deck(name,deckClass));
+    }
+
+    public LinkedList<Deck> getDecks() {
+        return decks;
+    }
+
+    public Integer nbrDeck() {
+        return decks.size();
+    }
+
+    public Deck getDeck(Integer position) {
+        return decks.get(position);
+    }
+
+    //method to get the sample json from assets
+    static String getJsonFromAssets(Context context, String fileName) {
+        String jsonString;
+        try {
+            InputStream is = context.getAssets().open(fileName);
+
+            int size = is.available();
+            byte[] buffer = new byte[size];
+            is.read(buffer);
+            is.close();
+
+            jsonString = new String(buffer, "UTF-8");
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+
+        return jsonString;
     }
 }
 
-class Deck {
+//class describing a deck
+class Deck implements Serializable {
     private String name;
     private String deckClass;
-    private ArrayList<String> cards;
-    private ArrayList<String> nbrCards;
+    //name of each card
+    private LinkedList<String> cards;
+    //number of each card
+    private LinkedList<String> nbrCards;
+    private LinkedList<Boolean> isLegendary;
 
-    public Deck(String name,String deckClass) {
+    public Deck(String name, String deckClass) {
         this.name = name;
         this.deckClass = deckClass;
-        cards = new ArrayList<>();
-        nbrCards = new ArrayList<>();
+        cards = new LinkedList<>();
+        nbrCards = new LinkedList<>();
     }
 
-    public Deck(String name, String deckClass, ArrayList<String> cards, ArrayList<String> nbrCards) {
+    public Deck(String name, String deckClass, LinkedList<String> cards, LinkedList<String> nbrCards) {
         this.name = name;
         this.deckClass = deckClass;
         this.cards = cards;
@@ -117,11 +184,11 @@ class Deck {
 
     }
 
-    public ArrayList<String> getCards() {
+    public LinkedList<String> getCards() {
         return cards;
     }
 
-    public List<String> getNbrCards() {
+    public LinkedList<String> getNbrCards() {
         return nbrCards;
     }
 
@@ -132,4 +199,56 @@ class Deck {
     public String getDeckClass() {
         return deckClass;
     }
+
+    //number of copies of a card
+    public Integer getNbrCard(String card) {
+        for (int i = 0; i < cards.size(); i++) {
+            if (cards.get(i).equals(card)) {
+
+                return Integer.parseInt(nbrCards.get(i));
+            }
+        }
+        return 0;
+    }
+
+    public void addCard(String card) {
+        boolean isCardInDeck = false;
+        int sumAllCards = nbrCards();
+        if (sumAllCards < 30) {
+            for (int i = 0; i < cards.size(); i++) {
+                if (cards.get(i).equals(card)) {
+                    isCardInDeck = true;
+                    nbrCards.set(i, "2");
+                }
+            }
+            if (!isCardInDeck) {
+                cards.add(card);
+                nbrCards.add("1");
+            }
+        }
+    }
+
+    public void removeCard(String card) {
+        for (int i = 0; i < cards.size(); i++) {
+            if (cards.get(i).equals(card)) {
+                if (nbrCards.get(i).equals("1")) {
+                    nbrCards.remove(i);
+                    cards.remove(i);
+                } else if (nbrCards.get(i).equals("2")) {
+                    nbrCards.set(i,"1");
+                }
+            }
+        }
+    }
+
+    //number total of cards in the deck
+    public Integer nbrCards() {
+        int sum = 0;
+        for (int i = 0; i < cards.size(); i++) {
+            sum += Integer.parseInt(nbrCards.get(i));
+        }
+        return sum;
+    }
+
+
 }

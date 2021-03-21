@@ -1,0 +1,9 @@
+{
+  "Decks" : [
+    {"name" :  "decktest",
+    "deckClass" :  "Hunter",
+    "Cards" :  [
+      {"id" :  "Hunter's Mark", "nbr" :  2}
+      ]
+    }
+  ]}
